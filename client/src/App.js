@@ -12,7 +12,7 @@ import {
   LinearProgress,
 } from "@mui/material";
 import "./App.css";
-import { uploadPhotos, setOverallSize } from "./actions";
+import { uploadPhotos, setOverallSize, resetUploadData } from "./actions";
 import { API_URL } from "./constants";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
 import CancelOutlinedIcon from "@mui/icons-material/CancelOutlined";
@@ -20,10 +20,8 @@ import CancelOutlinedIcon from "@mui/icons-material/CancelOutlined";
 let controller;
 
 function App() {
-  const [selectedPhotos, setSelectedPhotos] = useState([]);
-  const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [errorSnackbarOpen, setErrorSnackbarOpen] = useState(false);
-  const { loaded, photosLinks, uploadError } = useSelector(
+  const { inProgress, loaded, size, photosLinks, uploadError } = useSelector(
     (state) => state.appReducer
   );
   const [error, setError] = useState("");
@@ -62,47 +60,36 @@ function App() {
   };
 
   const setPhotos = (photos) => {
-    setSelectedPhotos(photos);
-  };
-
-  const handleCloseSnackbar = () => {
-    setSnackbarOpen(false);
+    controller = new AbortController();
+    dispatch(resetUploadData());
+    dispatch(setOverallSize({ size: getSize(photos), length: photos.length }));
+    dispatch(uploadPhotos({ photos, controller }));
   };
 
   const handleCloseErrorSnackbar = () => {
     setErrorSnackbarOpen(false);
   };
 
-  const overallSize = useMemo(() => {
-    return selectedPhotos.length > 0
-      ? selectedPhotos.reduce((acc, cur) => (acc += cur.size), 0)
+  const getSize = (photos) => {
+    return photos.length > 0
+      ? photos.reduce((acc, cur) => (acc += cur.size), 0)
       : 0;
-  }, [selectedPhotos]);
+  };
 
   const progress = useMemo(() => {
-    return loaded ? (loaded / overallSize) * 100 : 0;
-  }, [loaded, overallSize]);
+    return loaded ? (loaded / size) * 100 : 0;
+  }, [loaded, size]);
 
   const totalUploaded = useMemo(() => {
     const mb = 1024 * 1024;
     return loaded
-      ? `${(loaded / mb).toFixed(2)} / ${(overallSize / mb).toFixed(2)} mb`
+      ? `${(loaded / mb).toFixed(2)} / ${(size / mb).toFixed(2)} mb`
       : null;
-  }, [loaded, overallSize]);
+  }, [loaded, size]);
 
   useEffect(() => {
-    if (selectedPhotos.length > 0) {
-      controller = new AbortController();
-      dispatch(setOverallSize(overallSize));
-      dispatch(uploadPhotos({ photos: selectedPhotos, controller }));
-      setSnackbarOpen(true);
-    }
-  }, [selectedPhotos, overallSize, dispatch]);
-
-  useEffect(() => {
-    if (progress >= 100) {
+    if (progress === 100) {
       controller = null;
-      handleCloseSnackbar();
     }
   }, [progress]);
 
@@ -155,15 +142,15 @@ function App() {
         </Typography>
       </Box>
       {error || uploadError ? (
-        <Snackbar open={errorSnackbarOpen} onClose={handleCloseErrorSnackbar}>
+        <Snackbar open={errorSnackbarOpen}>
           <Alert onClose={handleCloseErrorSnackbar} severity="error">
             {error || uploadError}
           </Alert>
         </Snackbar>
       ) : (
         <Snackbar
-          open={snackbarOpen}
-          onClose={handleCloseSnackbar}
+          open={inProgress}
+          autoHideDuration={3000}
           sx={{
             "& .MuiPaper-root, & .MuiSnackbarContent-message": {
               padding: 0.75,
@@ -189,10 +176,7 @@ function App() {
                     aria-label="close"
                     color="inherit"
                     sx={{ p: 0.5 }}
-                    onClick={() => {
-                      cancelUpload();
-                      handleCloseSnackbar();
-                    }}
+                    onClick={cancelUpload}
                   >
                     <CancelOutlinedIcon />
                   </IconButton>
