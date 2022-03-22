@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import {
   Box,
@@ -7,23 +7,23 @@ import {
   Snackbar,
   Alert,
   SnackbarContent,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
-  List,
-  ListItem,
-  ListItemText,
+  Stack,
+  IconButton,
+  LinearProgress,
 } from "@mui/material";
 import "./App.css";
-import { uploadPhotos } from "./actions";
-import { constants } from "./constants";
-import Loader from "./components/Loader";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import { uploadPhotos, setOverallSize } from "./actions";
+import { API_URL } from "./constants";
+import UploadFileIcon from "@mui/icons-material/UploadFile";
+import CancelOutlinedIcon from "@mui/icons-material/CancelOutlined";
+
+let controller;
 
 function App() {
   const [selectedPhotos, setSelectedPhotos] = useState([]);
   const [snackbarOpen, setSnackbarOpen] = useState(false);
-  const { overallProgress, photosLinks, uploadError } = useSelector(
+  const [errorSnackbarOpen, setErrorSnackbarOpen] = useState(false);
+  const { loaded, photosLinks, uploadError } = useSelector(
     (state) => state.appReducer
   );
   const [error, setError] = useState("");
@@ -44,21 +44,16 @@ function App() {
   const handleDrop = (e) => {
     e.stopPropagation();
     e.preventDefault();
+    if (controller) return;
     e.target.classList.remove("dragging");
 
     const files = e.dataTransfer.files;
     const filteredFiles = filterFiles(files);
 
     if (filteredFiles.length > 0) {
-      resetUploadData();
+      setError("");
       setPhotos(filteredFiles);
-      setSnackbarOpen(true);
     } else setError("No photo selected.");
-  };
-
-  const resetUploadData = () => {
-    setError("");
-    dispatch({ type: constants.RESET_UPLOAD_DATA });
   };
 
   const filterFiles = (files) => {
@@ -74,19 +69,57 @@ function App() {
     setSnackbarOpen(false);
   };
 
-  useEffect(() => {
-    if (selectedPhotos.length > 0)
-      dispatch(
-        uploadPhotos({ photos: selectedPhotos, type: constants.UPLOAD_PHOTOS })
-      );
-  }, [selectedPhotos, dispatch]);
+  const handleCloseErrorSnackbar = () => {
+    setErrorSnackbarOpen(false);
+  };
+
+  const overallSize = useMemo(() => {
+    return selectedPhotos.length > 0
+      ? selectedPhotos.reduce((acc, cur) => (acc += cur.size), 0)
+      : 0;
+  }, [selectedPhotos]);
+
+  const progress = useMemo(() => {
+    return loaded ? (loaded / overallSize) * 100 : 0;
+  }, [loaded, overallSize]);
+
+  const totalUploaded = useMemo(() => {
+    const mb = 1024 * 1024;
+    return loaded
+      ? `${(loaded / mb).toFixed(2)} / ${(overallSize / mb).toFixed(2)} mb`
+      : null;
+  }, [loaded, overallSize]);
 
   useEffect(() => {
-    if (overallProgress === 100)
+    if (selectedPhotos.length > 0) {
+      controller = new AbortController();
+      dispatch(setOverallSize(overallSize));
+      dispatch(uploadPhotos({ photos: selectedPhotos, controller }));
+      setSnackbarOpen(true);
+    }
+  }, [selectedPhotos, overallSize, dispatch]);
+
+  useEffect(() => {
+    if (progress >= 100) {
+      controller = null;
+      handleCloseSnackbar();
+    }
+  }, [progress]);
+
+  useEffect(() => {
+    if (error || uploadError) {
+      setErrorSnackbarOpen(true);
+      controller = null;
       setTimeout(() => {
-        handleCloseSnackbar();
+        handleCloseErrorSnackbar();
       }, 6000);
-  }, [overallProgress]);
+    }
+  }, [error, uploadError]);
+
+  const cancelUpload = () => {
+    controller.abort();
+    controller = null;
+  };
 
   return (
     <div className="App">
@@ -96,7 +129,7 @@ function App() {
           <img
             style={{ height: "100px" }}
             key={link}
-            src={`http://localhost:5000/photos/upload/${link}`}
+            src={`${API_URL}/photos/upload/${link}`}
             alt={link}
           />
         ))}
@@ -122,12 +155,8 @@ function App() {
         </Typography>
       </Box>
       {error || uploadError ? (
-        <Snackbar
-          open={snackbarOpen}
-          autoHideDuration={6000}
-          onClose={handleCloseSnackbar}
-        >
-          <Alert onClose={handleCloseSnackbar} severity="error">
+        <Snackbar open={errorSnackbarOpen} onClose={handleCloseErrorSnackbar}>
+          <Alert onClose={handleCloseErrorSnackbar} severity="error">
             {error || uploadError}
           </Alert>
         </Snackbar>
@@ -137,36 +166,43 @@ function App() {
           onClose={handleCloseSnackbar}
           sx={{
             "& .MuiPaper-root, & .MuiSnackbarContent-message": {
-              padding: 0,
-              maxWidth: 400,
-              minWidth: 200,
+              padding: 0.75,
+              width: "100%",
+              minWidth: "320px",
             },
           }}
         >
           <SnackbarContent
-            sx={{ bgcolor: "common.white" }}
+            sx={{ width: "100%" }}
             message={
-              <Accordion sx={{ maxHeight: 500, overflowY: "auto" }}>
-                <AccordionSummary
-                  expandIcon={<ExpandMoreIcon />}
-                  aria-controls="panel1a-content"
-                  id="panel1a-header"
+              <Stack spacing={2}>
+                <Stack
+                  direction="row"
+                  sx={{ alignItems: "center", justifyContent: "space-between" }}
+                  spacing={3}
                 >
-                  <Box sx={{ display: "flex", alignItems: "center" }}>
-                    <Loader value={overallProgress} />
-                    <Typography sx={{ ml: 2 }}>Uploading</Typography>
-                  </Box>
-                </AccordionSummary>
-                <AccordionDetails>
-                  <List dense={false}>
-                    {selectedPhotos.map((photo) => (
-                      <ListItem key={photo.name}>
-                        <ListItemText primary={photo.name} />
-                      </ListItem>
-                    ))}
-                  </List>
-                </AccordionDetails>
-              </Accordion>
+                  <Stack direction="row" alignItems="center" spacing={1}>
+                    <UploadFileIcon sx={{ fontSize: "2.25rem" }} />
+                    <Typography>Uploading: {totalUploaded}</Typography>
+                  </Stack>
+                  <IconButton
+                    aria-label="close"
+                    color="inherit"
+                    sx={{ p: 0.5 }}
+                    onClick={() => {
+                      cancelUpload();
+                      handleCloseSnackbar();
+                    }}
+                  >
+                    <CancelOutlinedIcon />
+                  </IconButton>
+                </Stack>
+                <LinearProgress
+                  sx={{ width: "100%" }}
+                  variant="determinate"
+                  value={progress}
+                />
+              </Stack>
             }
           />
         </Snackbar>

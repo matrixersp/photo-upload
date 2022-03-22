@@ -1,8 +1,8 @@
-import { constants } from "../constants";
+import { constants, API_URL } from "../constants";
 import axios from "axios";
 
 export const uploadPhotos =
-  ({ photos }) =>
+  ({ photos, controller }) =>
   async (dispatch) => {
     photos.forEach(async (photo, index) => {
       const formData = new FormData();
@@ -11,17 +11,13 @@ export const uploadPhotos =
       dispatch({ type: constants.UPLOAD_PHOTOS_START });
       try {
         const response = await axios.post(
-          "http://localhost:5000/photos/upload",
+          `${API_URL}/photos/upload`,
           formData,
           {
             onUploadProgress({ loaded, total }) {
-              dispatch(
-                setUploadProgress({
-                  id: index,
-                  progress: Math.floor((loaded / total) * 100),
-                })
-              );
+              dispatch(setUploadProgress({ id: index, loaded }));
             },
+            signal: controller.signal,
           }
         );
 
@@ -41,4 +37,9 @@ export const uploadPhotos =
 export const setUploadProgress = (progress) => ({
   type: constants.SET_UPLOAD_PROGRESS,
   payload: progress,
+});
+
+export const setOverallSize = (size) => ({
+  type: constants.SET_OVERALL_SIZE,
+  payload: size,
 });
