@@ -24,7 +24,9 @@ const upload = multer({ storage })
 
 app.post('/photos/upload', upload.single('photo'), function (req, res, next) {
     // console.log(req.file)
-    return res.send(req.file.filename);
+    setTimeout(() => {
+      return res.send(req.file.filename);
+    }, 4000);
 })
 
 const PORT = process.env.PORT || 5000;

@@ -88,10 +88,10 @@ function App() {
   }, [loaded, size]);
 
   useEffect(() => {
-    if (progress === 100) {
+    if (!inProgress && progress === 100) {
       controller = null;
     }
-  }, [progress]);
+  }, [inProgress, progress]);
 
   useEffect(() => {
     if (error || uploadError) {
@@ -155,38 +155,44 @@ function App() {
             "& .MuiPaper-root, & .MuiSnackbarContent-message": {
               padding: 0.75,
               width: "100%",
-              minWidth: "320px",
             },
           }}
         >
           <SnackbarContent
-            sx={{ width: "100%" }}
+            sx={{ width: "100%", textAlign: "left" }}
             message={
-              <Stack spacing={2}>
-                <Stack
-                  direction="row"
-                  sx={{ alignItems: "center", justifyContent: "space-between" }}
-                  spacing={3}
-                >
-                  <Stack direction="row" alignItems="center" spacing={1}>
-                    <UploadFileIcon sx={{ fontSize: "2.25rem" }} />
-                    <Typography>Uploading: {totalUploaded}</Typography>
-                  </Stack>
-                  <IconButton
-                    aria-label="close"
-                    color="inherit"
-                    sx={{ p: 0.5 }}
-                    onClick={cancelUpload}
+              inProgress && progress === 100 ? (
+                "Processing..."
+              ) : (
+                <Stack spacing={2}>
+                  <Stack
+                    direction="row"
+                    sx={{
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                    }}
+                    spacing={3}
                   >
-                    <CancelOutlinedIcon />
-                  </IconButton>
+                    <Stack direction="row" alignItems="center" spacing={1}>
+                      <UploadFileIcon sx={{ fontSize: "2.25rem" }} />
+                      <Typography>Uploading: {totalUploaded}</Typography>
+                    </Stack>
+                    <IconButton
+                      aria-label="close"
+                      color="inherit"
+                      sx={{ p: 0.5 }}
+                      onClick={cancelUpload}
+                    >
+                      <CancelOutlinedIcon />
+                    </IconButton>
+                  </Stack>
+                  <LinearProgress
+                    sx={{ width: "100%" }}
+                    variant="determinate"
+                    value={progress}
+                  />
                 </Stack>
-                <LinearProgress
-                  sx={{ width: "100%" }}
-                  variant="determinate"
-                  value={progress}
-                />
-              </Stack>
+              )
             }
           />
         </Snackbar>
